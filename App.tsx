@@ -74,6 +74,13 @@ const App: React.FC = () => {
     setHorseSpeech("또 다른 운명의 조각을 확인하시겠습니까?");
   };
 
+  const handleReturnHome = () => {
+    setView('grid');
+    setIsFlipped(false);
+    setSelectedArticle(null);
+    setHorseSpeech("통찰의 여정을 계속 이어가시겠습니까?");
+  };
+
   const renderTarotBack = (categoryName: string, idx: number) => (
     <button
       key={categoryName + idx}
@@ -168,7 +175,7 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* [요구사항 반영] 카드 결과 공개 (Reveal) - 상하좌우 테두리 및 레이아웃 수정 */}
+        {/* 카드 결과 공개 (Reveal) */}
         {view === 'reveal' && selectedArticle && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/98 backdrop-blur-3xl p-4 md:p-10" onClick={handleBack}>
             <div 
@@ -177,17 +184,14 @@ const App: React.FC = () => {
               `}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* 상단: 배경 이미지 + 제목 섹션 (상단부 배치) */}
+              {/* 상단: 배경 이미지 + 제목 섹션 */}
               <div className="h-[45%] relative shrink-0">
-                {/* 배경 이미지 */}
                 <div 
                   className="absolute inset-0 bg-cover bg-center transition-transform duration-[10000ms] scale-110 animate-slow-zoom" 
                   style={{ backgroundImage: `url(${CATEGORY_IMAGES[selectedArticle.category] || CATEGORY_IMAGES[NewsCategory.GLOBAL]})` }}
                 ></div>
-                {/* 오버레이 그래디언트 */}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-transparent"></div>
                 
-                {/* 제목 및 카테고리 (상단 배치) */}
                 <div className="relative z-10 p-12 md:p-16 h-full flex flex-col justify-start">
                   <div className="flex items-center gap-4 mb-8">
                     <span className="px-5 py-1.5 bg-[#C5A059] rounded-full text-[10px] font-bold uppercase tracking-widest text-black shadow-lg serif">
@@ -204,11 +208,10 @@ const App: React.FC = () => {
                   </a>
                 </div>
                 
-                {/* 하단 화이트 페이드 (상단 이미지와 하단 텍스트 연결) */}
                 <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-white to-transparent"></div>
               </div>
 
-              {/* 하단: 요점 요약 섹션 (위치가 내려가지 않도록 padding 조절 및 상단 정렬) */}
+              {/* 하단: 요점 요약 섹션 */}
               <div className="flex-grow p-12 md:p-16 bg-white flex flex-col justify-between overflow-hidden">
                 <div className="space-y-10 overflow-y-auto pr-4 custom-scrollbar">
                    {selectedArticle.summary?.map((p: string, i: number) => (
@@ -219,7 +222,6 @@ const App: React.FC = () => {
                    ))}
                 </div>
                 
-                {/* 액션 푸터: 테두리 정렬 */}
                 <div className="mt-12 pt-10 border-t border-slate-100 flex justify-between items-center shrink-0">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-slate-400 tracking-[0.4em] uppercase mb-2 serif">Journal Intelligence</span>
@@ -263,9 +265,21 @@ const App: React.FC = () => {
                 </svg>
                 BACK TO SUMMARY
               </button>
-              <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-[0.6em] text-[#C5A059] mb-1">Pulse AI Analytics</p>
-                <p className="text-lg font-bold text-slate-400 serif">{selectedArticle.category}</p>
+              <div className="text-right flex items-center gap-10">
+                <div className="text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.6em] text-[#C5A059] mb-1">Pulse AI Analytics</p>
+                  <p className="text-lg font-bold text-slate-400 serif">{selectedArticle.category}</p>
+                </div>
+                {/* [추가] 상단 홈 버튼 */}
+                <button 
+                  onClick={handleReturnHome}
+                  className="w-14 h-14 rounded-2xl bg-slate-950 text-[#C5A059] flex items-center justify-center hover:bg-[#C5A059] hover:text-black transition-all shadow-md"
+                  title="첫 화면으로"
+                >
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                </button>
               </div>
             </header>
 
@@ -288,24 +302,37 @@ const App: React.FC = () => {
                 ))}
               </div>
 
-              <div className="p-16 md:p-24 bg-white rounded-[5rem] border border-[#C5A059]/10 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-12">
-                <div className="flex items-center space-x-10">
-                  <div className="w-20 h-20 bg-slate-950 rounded-3xl flex items-center justify-center font-black text-[#C5A059] text-4xl serif">
-                    {selectedArticle.source?.[0]}
+              {/* [요구사항 반영] 하단 액션 카드: 첫 화면으로 돌아가기 버튼 강조 */}
+              <div className="p-16 md:p-24 bg-white rounded-[5rem] border border-[#C5A059]/10 shadow-2xl flex flex-col gap-12">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-12 border-b border-slate-100 pb-12">
+                  <div className="flex items-center space-x-10">
+                    <div className="w-20 h-20 bg-slate-950 rounded-3xl flex items-center justify-center font-black text-[#C5A059] text-4xl serif">
+                      {selectedArticle.source?.[0]}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mb-2 serif">Source verified</p>
+                      <p className="text-3xl font-bold text-slate-900 serif tracking-tighter">{selectedArticle.source}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mb-2 serif">Source verified</p>
-                    <p className="text-3xl font-bold text-slate-900 serif tracking-tighter">{selectedArticle.source}</p>
-                  </div>
+                  <a 
+                    href={selectedArticle.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-full md:w-auto px-16 py-8 bg-slate-50 text-slate-900 border border-slate-200 rounded-[3rem] font-bold hover:bg-slate-200 transition-all text-center text-xl md:text-2xl serif uppercase tracking-widest"
+                  >
+                    GO TO ORIGINAL ARTICLE
+                  </a>
                 </div>
-                <a 
-                  href={selectedArticle.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="w-full md:w-auto px-16 py-8 bg-slate-950 text-[#C5A059] rounded-[3rem] font-bold hover:bg-[#C5A059] hover:text-black transition-all text-center text-xl md:text-2xl serif uppercase tracking-widest shadow-lg"
+
+                <button 
+                  onClick={handleReturnHome}
+                  className="w-full py-10 bg-slate-950 text-[#C5A059] rounded-[3rem] font-bold hover:bg-[#C5A059] hover:text-black transition-all text-center text-2xl md:text-3xl serif uppercase tracking-[0.3em] shadow-2xl group flex items-center justify-center gap-6"
                 >
-                  GO TO ORIGINAL ARTICLE
-                </a>
+                  <svg className="w-8 h-8 transform group-hover:-translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                  Finish Reading & Back to Cards
+                </button>
               </div>
             </article>
           </div>
