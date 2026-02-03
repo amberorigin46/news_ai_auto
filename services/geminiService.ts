@@ -1,135 +1,80 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { NewsArticle, GroundingSource } from "../types";
+import { NewsArticle, GroundingSource, NewsCategory } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-
-const CACHE_KEY = 'global_pulse_news_cache';
-const CACHE_TIME = 10 * 60 * 1000; // 10분 캐시 유지
-
-interface CachedData {
-  articles: NewsArticle[];
-  sources: GroundingSource[];
-  timestamp: number;
-}
-
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+const CACHE_KEY = 'global_pulse_news_cache_v5';
+const CACHE_TIME = 15 * 60 * 1000; // 15분으로 연장
 
 export const fetchAllCategoriesBriefing = async (categories: string[], forceRefresh = false): Promise<{ articles: NewsArticle[], sources: GroundingSource[] }> => {
-  // 1. 캐시 확인
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   if (!forceRefresh) {
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
-      const parsedCache: CachedData = JSON.parse(cached);
-      if (Date.now() - parsedCache.timestamp < CACHE_TIME) {
-        console.log("캐시된 데이터를 사용합니다.");
-        return { articles: parsedCache.articles, sources: parsedCache.sources };
-      }
+      const parsed = JSON.parse(cached);
+      if (Date.now() - parsed.timestamp < CACHE_TIME) return { articles: parsed.articles, sources: parsed.sources };
     }
   }
 
-  const maxRetries = 3;
-  let retryCount = 0;
+  // 404 방지를 위해 뉴스 통신사 우선순위 및 영구 링크(Permalink) 지침 강화
+  const prompt = `
+    당신은 세계 최고의 비주얼 뉴스 큐레이션 AI입니다. 
+    다음 카테고리별로 기사를 1개씩 선정하세요: [${categories.join(', ')}]
+    
+    [중요 규칙: 404 오류 및 링크 신뢰성 보장]
+    1. 뉴스 소스 제한: 반드시 Reuters, Associated Press(AP), BBC News, ABC News, The Guardian, CNN 등 신뢰도가 높고 링크가 변하지 않는 글로벌 주요 매체만 사용하세요.
+    2. 링크 유효성: 반드시 실시간으로 존재하는 '영구 링크(Canonical URL/Permalink)'를 가져와야 합니다. 단축 URL이나 소셜 미디어 공유용 링크는 절대 사용하지 마세요.
+    3. 유료벽 배제: 구독이 필요한 유료 기사(NYT, WSJ 등)는 피하고, 누구나 즉시 읽을 수 있는 무료 공개 기사만 선정하세요.
+    4. 이미지 품질: 기사와 직접적으로 연관된 고화질 실제 보도 사진 URL을 정확하게 매칭하세요.
+    5. 내용: 요약은 팩트 중심의 중립적인 톤을 유지하세요.
 
-  const executeFetch = async (): Promise<{ articles: NewsArticle[], sources: GroundingSource[] }> => {
-    try {
-      const prompt = `
-        글로벌 뉴스 브리핑 AI로서 역할을 수행하세요.
-        다음 각 카테고리별로 지난 24시간 동안 가장 중요한 글로벌 뉴스를 딱 1개씩 선정하여 브리핑을 생성하세요: [${categories.join(', ')}]
-        
-        규칙:
-        - 반드시 한국어로 답변하세요.
-        - 각 카테고리당 1개의 기사, 총 ${categories.length}개의 기사를 반환하세요.
-        - 사실적이고 중립적이어야 하며 의견을 배제하세요.
-        - **중요: 반드시 유료 구독(Paywall) 없이 무료로 전문을 읽을 수 있는 뉴스 소스(예: BBC, Reuters, AP News, 연합뉴스, YTN 등)를 선정하세요.**
-        - 유료 결제가 필요한 매체(WSJ, FT, NYT 일부 등)는 제외하세요.
-        - 기사 전문을 복제하지 말고 핵심 내용을 요약하세요.
-        - 항상 출처를 명시하세요.
-        - JSON 배열 객체 형태로 반환하세요.
-        
-        형식:
-        각 객체는 다음을 포함해야 합니다:
-        - title: 간결한 헤드라인 (한국어).
-        - category: 요청받은 카테고리명 중 하나 (예: 경제, 테크 등).
-        - summary: 3~5개의 불렛 포인트 요약 배열 (한국어).
-        - source: 언론사 명칭.
-        - url: 기사 원문 URL (반드시 유효하고 무료로 접근 가능한 링크여야 함).
-      `;
+    [응답 형식]
+    JSON 배열로 반환하세요.
+    - title: 제목 (한국어 번역)
+    - category: 카테고리
+    - summary: 요약 3문장 (배열, 한국어)
+    - source: 매체명 (예: BBC News)
+    - url: 실제 뉴스 기사 영구 링크
+    - imageUrl: 기사 관련 고화질 이미지 URL
+  `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                category: { type: Type.STRING },
-                summary: { 
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING }
-                },
-                source: { type: Type.STRING },
-                url: { type: Type.STRING }
-              },
-              required: ["title", "category", "summary", "source", "url"]
-            }
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              category: { type: Type.STRING },
+              summary: { type: Type.ARRAY, items: { type: Type.STRING } },
+              source: { type: Type.STRING },
+              url: { type: Type.STRING },
+              imageUrl: { type: Type.STRING }
+            },
+            required: ["title", "category", "summary", "source", "url", "imageUrl"]
           }
         }
-      });
-
-      const text = response.text || '[]';
-      let articles: NewsArticle[] = [];
-      try {
-        const parsed = JSON.parse(text);
-        articles = parsed.map((item: any, index: number) => ({
-          ...item,
-          id: `article-${index}-${Date.now()}`,
-          timestamp: new Date().toLocaleTimeString('ko-KR')
-        }));
-      } catch (e) {
-        console.error("뉴스 JSON 파싱 실패", e);
       }
+    });
 
-      const sources: GroundingSource[] = [];
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      if (chunks) {
-        chunks.forEach((chunk: any) => {
-          if (chunk.web) {
-            sources.push({
-              title: chunk.web.title || '관련 출처',
-              uri: chunk.web.uri
-            });
-          }
-        });
-      }
+    const parsedArticles = JSON.parse(response.text || "[]");
+    const articles: NewsArticle[] = parsedArticles.map((item: any, idx: number) => ({
+      ...item,
+      id: `art-${idx}-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString('ko-KR')
+    }));
 
-      // 결과 캐싱
-      const dataToCache: CachedData = { articles, sources, timestamp: Date.now() };
-      localStorage.setItem(CACHE_KEY, JSON.stringify(dataToCache));
-
-      return { articles, sources };
-    } catch (error: any) {
-      const isQuotaError = error?.message?.includes('429') || error?.status === 'RESOURCE_EXHAUSTED';
-      
-      if (isQuotaError && retryCount < maxRetries) {
-        retryCount++;
-        const waitTime = Math.pow(2, retryCount) * 5000; 
-        console.warn(`429 할당량 초과. ${waitTime}ms 후 재시도 (${retryCount}/${maxRetries})...`);
-        await delay(waitTime);
-        return executeFetch();
-      }
-      throw error;
-    }
-  };
-
-  return executeFetch();
-};
-
-export const fetchNewsBriefing = async (category: string): Promise<{ articles: NewsArticle[], sources: GroundingSource[] }> => {
-  return fetchAllCategoriesBriefing([category]);
+    const data = { articles, sources: [], timestamp: Date.now() };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    return { articles, sources: [] };
+  } catch (error) {
+    console.error("News fetch error:", error);
+    throw error;
+  }
 };

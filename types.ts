@@ -6,6 +6,7 @@ export interface NewsArticle {
   summary: string[];
   source: string;
   url: string;
+  imageUrl?: string;
   timestamp: string;
 }
 
@@ -28,5 +29,6 @@ export enum NewsCategory {
   POLITICS = '정치',
   SOCIETY = '사회',
   CULTURE = '문화',
-  GLOBAL = '글로벌 이슈'
+  GLOBAL = '글로벌 이슈',
+  BONUS = '미스터리/루머'
 }
